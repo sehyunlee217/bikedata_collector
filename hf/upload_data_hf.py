@@ -1,3 +1,10 @@
+"""
+    [Joe]
+    - Script to fetch and upload data to HF Dataset Repo
+    - Running on Raspberry Pi atm
+"""
+
+
 import json
 import logging
 import time
@@ -5,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from huggingface_hub import CommitScheduler
 import httpx
+import gzip
 
 STATION_STATUS_URL = (
     "https://tor.publicbikesystem.net/ube/gbfs/v1/en/station_status"
@@ -13,8 +21,8 @@ STATION_STATUS_URL = (
 
 HF_REPO_ID = "sehyunlee217/bikedata_stream"
 OUTPUT_DIR = Path("bike_data").resolve()
-POLL_SECONDS = 60       # Collect every 5 minutes
-UPLOAD_MINUTES = 1   # Upload every 5 minutes
+POLL_SECONDS = 60*5 # Collect every 5 minutes
+UPLOAD_MINUTES = 5 # Upload every 5 minutes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,11 +54,19 @@ def save_snapshot(payload):
     day_dir = OUTPUT_DIR / collected_at.strftime("%Y/%m/%d")
     day_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = collected_at.strftime("%Y%m%dT%H%M%S.%fZ.json")
+    filename = collected_at.strftime("%Y%m%dT%H%M%S.%fZ.json.gz")
     destination = day_dir / filename
     temporary = destination.with_suffix(".tmp")
 
-    temporary.write_text(json.dumps(payload), encoding="utf-8")
+    # save as json.gz
+    with gzip.open(
+        temporary,
+        "wt",
+        encoding="utf-8",
+        compresslevel=6,
+    ) as file:
+        json.dump(payload, file, separators=(",", ":"))
+
     temporary.replace(destination)
 
     return destination
@@ -64,10 +80,10 @@ def main():
         repo_type="dataset",
         private=True,
         folder_path=OUTPUT_DIR,
-        path_in_repo="raw/station_status",
+        path_in_repo="data/station_status",
         every=UPLOAD_MINUTES,
-        allow_patterns=["*.json"],
-) as scheduler:
+        allow_patterns=["*.json", "*.json.gz"],
+    ) as scheduler:
         with httpx.Client(timeout=20) as client:
             while True:
                 try:

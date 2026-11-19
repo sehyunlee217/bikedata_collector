@@ -1,0 +1,9 @@
+[project]
+name = "bikedata-collector"
+version = "0.1.0"
+description = "Collect Bike Share Toronto snapshots and convert them to CSV"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.28.1",
+    "huggingface-hub>=2.4.0",
+]
